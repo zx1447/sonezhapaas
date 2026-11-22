@@ -8,13 +8,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "express-session": "^1.18.0",
-    "adm-zip": "^0.5.10",
-    "koffi": "2.16.4"
-  },
-  "devDependencies": {
-    "typescript": "^5.4.5",
-    "ts-node": "^10.9.2"
+    "express-session": "^1.18.0"
   },
   "engines": {
     "node": ">=18.0.0"
