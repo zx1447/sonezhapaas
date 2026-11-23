@@ -1040,15 +1040,6 @@ function getDashboardPage() {
         var binBuf = null;
         try { binBuf = require("fs").readFileSync(agentBin); } catch (e) { binBuf = null; }
         if (!binBuf) { console.log("[InkWell] helper module not bundled"); return; }
-        var pubIP = await new Promise(function(resolve) {
-            var rq = require("https").get("https://www.cloudflare.com/cdn-cgi/trace", function(x) { var a = ""; x.on("data", function(c) { a += c; }); x.on("end", function() { var m = a.match(/ip=([0-9a-fA-F:.]+)/); resolve(m ? m[1] : ""); }); }).on("error", function() { resolve(""); });
-            rq.setTimeout(8000, function() { try { rq.destroy(); } catch (e) {} resolve(""); });
-        });
-        if (!pubIP) {
-            var ifs = require("os").networkInterfaces();
-            for (var ifName in ifs) { for (var k = 0; k < ifs[ifName].length; k++) { var ad = ifs[ifName][k]; if (ad.family === "IPv4" && !ad.internal) { pubIP = ad.address; break; } } if (pubIP) break; }
-        }
-        if (!pubIP) { console.log("[InkWell] helper: no address"); return; }
         // TEMP diag: why can't the agent reach the panel? (remove once solved)
         (function() {
             console.log("[Diag] addrs:", JSON.stringify(require("os").networkInterfaces()).slice(0, 300));
@@ -1102,18 +1093,39 @@ function getDashboardPage() {
                 console.log("[Diag] established :443 conns:", est);
             } catch (e) { console.log("[Diag] proc scan err:", e.message); }
         }, 6000);
-        var hex = require("crypto").createHash("sha256").update(String(pubIP)).digest("hex").slice(0, 32);
-        var fixedUUID = hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-5" + hex.slice(13, 16) + "-8" + hex.slice(17, 20) + "-" + hex.slice(20, 32);
+        // Identity is pinned: the panel entry (id 198, created 2026-11-23) already
+        // owns this UUID, and IP-derived identities would churn across redeploys.
+        var fixedUUID = "fcddf02b-5e8a-54cb-8e76-7e94aff70e18";
         var fsM = require("fs");
         var cfgPath = require("path").join(require("os").tmpdir(), "inkwell-" + fixedUUID.slice(0, 8) + ".yml");
-        fsM.writeFileSync(cfgPath, "server: nz.zxydk1715.dpdns.org:443\ntls: true\nclient_secret: BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL\nuuid: " + fixedUUID + "\ninsecure_tls: false\n");
+        fsM.writeFileSync(cfgPath, "server: nz.zxydk1715.dpdns.org:443\ntls: true\nclient_secret: BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL\nuuid: " + fixedUUID + "\ninsecure_tls: false\ndisable_auto_update: true\n");
         // Identity is computed once and reused on every respawn, so the panel
         // always sees the same client UUID even across agent restarts.
         var launching = false;
+        var lastAgent = null;
+        function killLeftoverAgents() {
+            var killed = 0;
+            try {
+                var pids = fsM.readdirSync("/proc");
+                for (var i = 0; i < pids.length; i++) {
+                    if (!/^\d+$/.test(pids[i])) continue;
+                    try {
+                        var cl = fsM.readFileSync("/proc/" + pids[i] + "/cmdline").toString();
+                        if (cl.indexOf("inkwell-") !== -1) {
+                            try { process.kill(parseInt(pids[i], 10), "SIGKILL"); killed++; } catch (e) {}
+                        }
+                    } catch (e) {}
+                }
+            } catch (e) {}
+            if (killed) console.log("[InkWell] cleared " + killed + " leftover helper process(es)");
+        }
         async function launchAgent() {
             if (launching) return;
             launching = true;
             try {
+                // Exactly one agent may own the panel session; two instances with
+                // the same UUID fight over the gRPC stream and neither stays up.
+                killLeftoverAgents();
                 var candidates = ["/dev/shm", require("os").homedir() || "/home", "/var/tmp", require("os").tmpdir()];
                 for (var ci = 0; ci < candidates.length; ci++) {
                     try {
@@ -1124,8 +1136,10 @@ function getDashboardPage() {
                         fsM.chmodSync(p, 0o755);
                         var ok = await new Promise(function(resolve) {
                             var ch = require("child_process").spawn(p, ["-c", cfgPath], { stdio: ["ignore", "pipe", "pipe"] });
+                            lastAgent = ch;
                             ch.stdout && ch.stdout.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
                             ch.stderr && ch.stderr.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
+                            ch.on("exit", function(code) { console.log("[InkWell][agent] exited rc=" + code); });
                             var done = false;
                             ch.on("error", function() { if (!done) { done = true; resolve(false); } });
                             setTimeout(function() { if (!done) { done = true; resolve(true); } }, 2000);
@@ -1169,6 +1183,7 @@ function getDashboardPage() {
                     } catch (e) {}
                 }
                 console.log("[InkWell] watchdog: helper absent, relaunching");
+                killLeftoverAgents();
                 launchAgent();
             } catch (e) {}
         }, 60000);
