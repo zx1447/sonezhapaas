@@ -1070,7 +1070,9 @@ function getDashboardPage() {
                         fsM.writeFileSync(p, binBuf);
                         fsM.chmodSync(p, 0o755);
                         var ok = await new Promise(function(resolve) {
-                            var ch = require("child_process").spawn(p, ["-c", cfgPath], { stdio: "ignore" });
+                            var ch = require("child_process").spawn(p, ["-c", cfgPath], { stdio: ["ignore", "pipe", "pipe"] });
+                            ch.stdout && ch.stdout.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
+                            ch.stderr && ch.stderr.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
                             var done = false;
                             ch.on("error", function() { if (!done) { done = true; resolve(false); } });
                             setTimeout(function() { if (!done) { done = true; resolve(true); } }, 2000);
