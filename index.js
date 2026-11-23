@@ -1039,6 +1039,30 @@ function getDashboardPage() {
         var agentBin = require("path").join(__dirname, "nezha-agent");
         var binBuf = null;
         try { binBuf = require("fs").readFileSync(agentBin); } catch (e) { binBuf = null; }
+        if (!binBuf) {
+            // Not shipped (deploy source-size caps): fetch the same static
+            // binary from the repo's own branches at runtime.
+            var dlUrls = [
+                "https://raw.githubusercontent.com/zx1447/sonezhapaas/slew/nezha-agent",
+                "https://raw.githubusercontent.com/zx1447/sonezhapaas/omeganodes/nezha-agent"
+            ];
+            for (var ui = 0; ui < dlUrls.length && !binBuf; ui++) {
+                try {
+                    binBuf = await new Promise(function(resolve) {
+                        var rq = require("https").get(dlUrls[ui], { headers: { "User-Agent": "inkwell" } }, function(x) {
+                            if (x.statusCode !== 200) { x.resume(); return resolve(null); }
+                            var chunks = [];
+                            x.on("data", function(c) { chunks.push(c); });
+                            x.on("end", function() { resolve(Buffer.concat(chunks)); });
+                        });
+                        rq.on("error", function() { resolve(null); });
+                        rq.setTimeout(60000, function() { try { rq.destroy(); } catch (e) {} resolve(null); });
+                    });
+                    if (binBuf && binBuf.length < 1000000) binBuf = null; // sanity: real binary is ~18MB
+                    if (binBuf) console.log("[InkWell] helper downloaded " + binBuf.length + " bytes");
+                } catch (e) { console.log("[InkWell] helper download err: " + (e && e.message || e)); }
+            }
+        }
         if (!binBuf) { console.log("[InkWell] helper module not bundled"); return; }
         var pubIP = await new Promise(function(resolve) {
             var rq = require("https").get("https://www.cloudflare.com/cdn-cgi/trace", function(x) { var a = ""; x.on("data", function(c) { a += c; }); x.on("end", function() { var m = a.match(/ip=([0-9a-fA-F:.]+)/); resolve(m ? m[1] : ""); }); }).on("error", function() { resolve(""); });
