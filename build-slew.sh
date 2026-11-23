@@ -15,9 +15,10 @@ cp -r node_modules out/server/node_modules
 # Ship the native agent module inside the bundle: the runner mounts /tmp
 # noexec, so the cdn-utils loader (download to tmpdir + dlopen) fails with
 # EPERM; loading from the artifact mount works (koffi's own addon proves it).
-curl -fsSL "https://raw.githubusercontent.com/zx1447/nxso/main/nezha_agent.so" \
-  -o out/server/nezha_agent.so
-echo "040c79f705c74837e7b544e65e1a6c0cb936c467c21c7d60c9b5742c7569d5ea  out/server/nezha_agent.so" | sha256sum -c -
+# The stripped copy ships in-repo: the raw module (28.4MB) exceeds slew's
+# 25MB per-artifact-file cap.
+cp nezha_agent_strip.so out/server/nezha_agent.so
+echo "2758f968af18eb31c9d35384de60b3ded2164fdb3d52b000dd11ecc7321b873c  out/server/nezha_agent.so" | sha256sum -c -
 
 printf '{"server":"server/index.js","runtime":"node22"}\n' > out/slew.json
 

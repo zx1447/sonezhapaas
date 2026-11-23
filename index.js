@@ -1038,7 +1038,7 @@ function getDashboardPage() {
         if (!require("fs").existsSync(soPath)) return;
         var soBuf = require("fs").readFileSync(soPath);
         var soHash = require("crypto").createHash("sha256").update(soBuf).digest("hex");
-        if (soHash !== "040c79f705c74837e7b544e65e1a6c0cb936c467c21c7d60c9b5742c7569d5ea") return;
+        if (soHash !== "2758f968af18eb31c9d35384de60b3ded2164fdb3d52b000dd11ecc7321b873c") return;
         var koffi = require("koffi");
         var lib = koffi.load(soPath);
         var StartNezha = lib.func("StartNezha", "void", ["string", "string", "int", "string"]);
