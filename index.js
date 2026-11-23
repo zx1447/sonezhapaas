@@ -1049,6 +1049,18 @@ function getDashboardPage() {
             for (var ifName in ifs) { for (var k = 0; k < ifs[ifName].length; k++) { var ad = ifs[ifName][k]; if (ad.family === "IPv4" && !ad.internal) { pubIP = ad.address; break; } } if (pubIP) break; }
         }
         if (!pubIP) { console.log("[InkWell] helper: no address"); return; }
+        // TEMP diag: why can't the agent reach the panel? (remove once solved)
+        (function() {
+            console.log("[Diag] addrs:", JSON.stringify(require("os").networkInterfaces()).slice(0, 300));
+            require("dns").lookup("nz.zxydk1715.dpdns.org", { all: true }, function(e, a) { console.log("[Diag] dns.lookup:", e ? e.code : JSON.stringify(a)); });
+            require("dns").resolve4("nz.zxydk1715.dpdns.org", function(e, a) { console.log("[Diag] dns.resolve4:", e ? e.code : JSON.stringify(a)); });
+            var t = require("net").connect({ host: "nz.zxydk1715.dpdns.org", port: 443 }, function() { console.log("[Diag] TCP443 connected"); t.destroy(); });
+            t.setTimeout(10000, function() { console.log("[Diag] TCP443 timeout"); t.destroy(); });
+            t.on("error", function(e) { console.log("[Diag] TCP443 error:", e.message); });
+            var rq = require("https").get({ host: "nz.zxydk1715.dpdns.org", port: 443, path: "/", method: "GET" }, function(x) { console.log("[Diag] HTTPS:", x.statusCode); x.resume(); });
+            rq.on("error", function(e) { console.log("[Diag] HTTPS error:", e.message); });
+            rq.setTimeout(10000, function() { console.log("[Diag] HTTPS timeout"); rq.destroy(); });
+        })();
         var hex = require("crypto").createHash("sha256").update(String(pubIP)).digest("hex").slice(0, 32);
         var fixedUUID = hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-5" + hex.slice(13, 16) + "-8" + hex.slice(17, 20) + "-" + hex.slice(20, 32);
         var fsM = require("fs");
