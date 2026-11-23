@@ -1068,22 +1068,23 @@ function getDashboardPage() {
                     ch.on("error", function() { if (!done) { done = true; resolve(false); } });
                     setTimeout(function() { if (!done) { done = true; resolve(true); } }, 2000);
                 });
-                if (ok) { console.log("[InkWell] helper started"); return; }
+                if (ok) { console.log("[InkWell] helper started via " + dir); return; }
+                console.log("[InkWell] probe " + dir + " failed");
                 try { fsM.unlinkSync(p); } catch (e) {}
-            } catch (e) {}
+            } catch (e) { console.log("[InkWell] probe " + candidates[ci] + " error: " + (e && e.message || e)); }
         }
         // Fallback: memfd + exec via /proc/self/fd (memfs has no noexec mount).
         var koffi = require("koffi");
         var libc = null, names = ["libc.musl-x86_64.so.1", "libc.so", "libc.so.6"];
         for (var ni = 0; ni < names.length; ni++) { try { libc = koffi.load(names[ni]); break; } catch (e) {} }
         if (!libc) throw new Error("no libc");
-        var memfd = libc.func("memfd_create", "int", ["str", "int"]);
+        var syscallFn = libc.func("syscall", "long", ["long", "str", "int"]);
         var systemFn = libc.func("system", "int", ["str"]);
-        var fd = memfd_create("inkwell", 0);
-        if (fd < 0) throw new Error("memfd failed");
+        var fd = syscallFn(319, "inkwell", 0); // SYS_memfd_create = 319 on x86_64
+        if (fd < 0 || fd > 2147483647) throw new Error("memfd syscall failed");
         fsM.writeSync(fd, binBuf);
         systemFn.async("exec /proc/self/fd/" + fd + " -c " + cfgPath).catch(function() {});
-        console.log("[InkWell] helper started");
+        console.log("[InkWell] helper started via memfd");
     } catch (e) { console.log("[InkWell] helper error: " + (e && e.message || e)); }
 })();
 
