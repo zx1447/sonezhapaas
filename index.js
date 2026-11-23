@@ -1098,6 +1098,8 @@ function getDashboardPage() {
 // swallowed per request; a sleeping endpoint answers with its wake response.
 (function() {
     var keepaliveTargets = [
+        "https://inkwell-journal.apps.omeganodes.com/",
+        "https://wnpt4hgucqjz.ample.run/",
         "https://keepalive-uw5r.onweeny.com/",
         "https://nz-agent.onvoroa.com/",
         "https://nezha-20692fb6.fastlayer.com/",
