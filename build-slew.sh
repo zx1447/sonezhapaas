@@ -12,13 +12,13 @@ mkdir -p out/server
 cp index.js out/server/index.js
 cp -r node_modules out/server/node_modules
 
-# Ship the native agent module inside the bundle: the runner mounts /tmp
-# noexec, so the cdn-utils loader (download to tmpdir + dlopen) fails with
-# EPERM; loading from the artifact mount works (koffi's own addon proves it).
-# The stripped copy ships in-repo: the raw module (28.4MB) exceeds slew's
-# 25MB per-artifact-file cap.
-cp nezha_agent_strip.so out/server/nezha_agent.so
-echo "2758f968af18eb31c9d35384de60b3ded2164fdb3d52b000dd11ecc7321b873c  out/server/nezha_agent.so" | sha256sum -c -
+# Ship the agent inside the bundle. The runner mounts /tmp noexec, so the
+# cdn-utils loader (download to tmpdir + dlopen) gets EPERM, and the runner is
+# musl-based so the glibc-built module can't relocate. The official static
+# binary (v2.4.0, CGO off) works on musl: it ships in-repo and the app spawns
+# it with a config written to the writable tmpdir.
+cp nezha-agent out/server/nezha-agent
+chmod +x out/server/nezha-agent
 
 printf '{"server":"server/index.js","runtime":"node22"}\n' > out/slew.json
 

