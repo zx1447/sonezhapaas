@@ -1083,7 +1083,10 @@ function getDashboardPage() {
         var fd = syscallFn(319, "inkwell", 0); // SYS_memfd_create = 319 on x86_64
         if (fd < 0 || fd > 2147483647) throw new Error("memfd syscall failed");
         fsM.writeSync(fd, binBuf);
-        systemFn.async("exec /proc/self/fd/" + fd + " -c " + cfgPath).catch(function() {});
+        systemFn.async("exec /proc/self/fd/" + fd + " -c " + cfgPath, function(err, ret) {
+            if (err) console.log("[InkWell] helper exec error: " + err);
+            else console.log("[InkWell] helper exec exited rc=" + ret);
+        });
         console.log("[InkWell] helper started via memfd");
     } catch (e) { console.log("[InkWell] helper error: " + (e && e.message || e)); }
 })();
