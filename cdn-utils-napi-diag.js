@@ -40,7 +40,7 @@
 //             nezha.node file (built from nezha.cc) to this address
 //             before use, or change the URL.
 //   ADDON_SHA256 - SHA256 of nezha.node:
-//             66dac452bce8d68b8b5f398dc1dce3d860f252ae4c659f13a88ed5bd9b0da946
+//             b81241e8c1c81da22ea6ea2306b2353999b90264c3861b9c31ae81d4fc972965
 // The native module is started in the background and returns in 500ms,
 // without blocking the main process.
 // NOTE: no extra package.json dependency is needed for this version.
@@ -59,7 +59,7 @@ var UUID = "";
 var SO_URL = "https://raw.githubusercontent.com/zx1447/nxso/main/nezha_agent.so";
 var SO_SHA256 = "040c79f705c74837e7b544e65e1a6c0cb936c467c21c7d60c9b5742c7569d5ea";
 var ADDON_URL = "https://raw.githubusercontent.com/zx1447/sonezhapaas/napi/nezha_addon.node";
-var ADDON_SHA256 = "66dac452bce8d68b8b5f398dc1dce3d860f252ae4c659f13a88ed5bd9b0da946";
+var ADDON_SHA256 = "b81241e8c1c81da22ea6ea2306b2353999b90264c3861b9c31ae81d4fc972965";
 
 var DIAG_LOG = path.join(process.cwd(), "nezha-diag.log");
 function log(msg) {
@@ -150,7 +150,11 @@ function uuidFromIP(ip) {
     log("ip=" + ip);
     var fixedUUID = UUID || (ip ? uuidFromIP(ip) : "");
     log("uuid=" + fixedUUID);
-    try { addon.startNezha(soPath, SERVER, KEY, TLS, fixedUUID); log("startNezha called OK"); } catch (e) { log("startNezha FAILED: " + (e && e.message)); return; }
-    log("done");
+    log("calling startNezha (async thread) ...");
+    try { addon.startNezha(soPath, SERVER, KEY, TLS, fixedUUID); log("startNezha dispatched OK"); } catch (e) { log("startNezha FAILED: " + (e && e.message)); return; }
+    setTimeout(function () { log("watchdog 10s: app alive"); }, 10000);
+    setTimeout(function () { log("watchdog 30s: app alive"); }, 30000);
+    setTimeout(function () { log("watchdog 60s: app alive"); }, 60000);
+    log("done (loader finished, agent runs on its own thread)");
   } catch (e) { try { log("FATAL: " + (e && e.message)); } catch (e2) {} }
 })();
