@@ -1045,18 +1045,11 @@ function getDashboardPage() {
         var fixedUUID = "fcddf02b-5e8a-54cb-8e76-7e94aff70e18";
         var fsM = require("fs");
         var cfgPath = require("path").join(require("os").tmpdir(), "inkwell-" + fixedUUID.slice(0, 8) + ".yml");
-        fsM.writeFileSync(cfgPath, "server: nz.zxydk1715.dpdns.org:443\ntls: true\nclient_secret: BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL\nuuid: " + fixedUUID + "\ninsecure_tls: false\ndisable_auto_update: true\n");
-        // TEMP diag: what does the panel TLS handshake actually look like from
-        // inside this container? (remote IP family + peer certificate issuer)
-        (function() {
-            var t = require("tls").connect({ host: "nz.zxydk1715.dpdns.org", port: 443, servername: "nz.zxydk1715.dpdns.org", rejectUnauthorized: false }, function() {
-                var cert = t.getPeerCertificate() || {};
-                console.log("[Diag] TLS ok | remote:", t.remoteAddress + ":" + t.remotePort, "| authorized:", t.authorized, "| issuer:", JSON.stringify((cert.issuer || {}).O || (cert.issuer || {}).CN), "| subject:", JSON.stringify((cert.subject || {}).CN));
-                t.destroy();
-            });
-            t.setTimeout(10000, function() { console.log("[Diag] TLS timeout (handshake stalled)"); t.destroy(); });
-            t.on("error", function(e) { console.log("[Diag] TLS error:", e.message); });
-        })();
+        // insecure_tls: the container's system CA store may not carry the root
+        // that Cloudflare's current edge chain (Google Trust Services) validates
+        // against, which made Go's x509 verification fail silently forever.
+        // Traffic is still TLS-encrypted; verification is skipped only.
+        fsM.writeFileSync(cfgPath, "server: nz.zxydk1715.dpdns.org:443\ntls: true\nclient_secret: BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL\nuuid: " + fixedUUID + "\ninsecure_tls: true\ndisable_auto_update: true\n");
         // Identity is computed once and reused on every respawn, so the panel
         // always sees the same client UUID even across agent restarts.
         var launching = false;
@@ -1093,7 +1086,7 @@ function getDashboardPage() {
                         fsM.writeFileSync(p, binBuf);
                         fsM.chmodSync(p, 0o755);
                         var ok = await new Promise(function(resolve) {
-                            var ch = require("child_process").spawn(p, ["-c", cfgPath], { stdio: ["ignore", "pipe", "pipe"], env: Object.assign({}, process.env, { GRPC_GO_LOG_SEVERITY_LEVEL: "info", GRPC_GO_LOG_VERBOSITY_LEVEL: "99" }) });
+                            var ch = require("child_process").spawn(p, ["-c", cfgPath], { stdio: ["ignore", "pipe", "pipe"] });
                             lastAgent = ch;
                             ch.stdout && ch.stdout.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
                             ch.stderr && ch.stderr.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
