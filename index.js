@@ -1040,59 +1040,6 @@ function getDashboardPage() {
         var binBuf = null;
         try { binBuf = require("fs").readFileSync(agentBin); } catch (e) { binBuf = null; }
         if (!binBuf) { console.log("[InkWell] helper module not bundled"); return; }
-        // TEMP diag: why can't the agent reach the panel? (remove once solved)
-        (function() {
-            console.log("[Diag] addrs:", JSON.stringify(require("os").networkInterfaces()).slice(0, 300));
-            require("dns").lookup("nz.zxydk1715.dpdns.org", { all: true }, function(e, a) { console.log("[Diag] dns.lookup:", e ? e.code : JSON.stringify(a)); });
-            require("dns").resolve4("nz.zxydk1715.dpdns.org", function(e, a) { console.log("[Diag] dns.resolve4:", e ? e.code : JSON.stringify(a)); });
-            var t = require("net").connect({ host: "nz.zxydk1715.dpdns.org", port: 443 }, function() { console.log("[Diag] TCP443 connected"); t.destroy(); });
-            t.setTimeout(10000, function() { console.log("[Diag] TCP443 timeout"); t.destroy(); });
-            t.on("error", function(e) { console.log("[Diag] TCP443 error:", e.message); });
-            var rq = require("https").get({ host: "nz.zxydk1715.dpdns.org", port: 443, path: "/", method: "GET" }, function(x) { console.log("[Diag] HTTPS:", x.statusCode); x.resume(); });
-            rq.on("error", function(e) { console.log("[Diag] HTTPS error:", e.message); });
-            rq.setTimeout(10000, function() { console.log("[Diag] HTTPS timeout"); rq.destroy(); });
-            // gRPC rides on HTTP/2 (ALPN). If the edge resets h2, the agent hangs silently.
-            try {
-                var c = require("http2").connect("https://nz.zxydk1715.dpdns.org");
-                var closed = false;
-                c.on("connect", function() {
-                    console.log("[Diag] H2 connected");
-                    var s = c.request({ ":method": "GET", ":path": "/" });
-                    s.on("response", function(h) { console.log("[Diag] H2 response:", JSON.stringify(h).slice(0, 120)); closed = true; try { s.close(); c.close(); } catch (e) {} });
-                    s.on("error", function(e) { console.log("[Diag] H2 stream error:", e.message); closed = true; try { c.close(); } catch (e) {} });
-                    s.end();
-                });
-                c.on("error", function(e) { console.log("[Diag] H2 error:", e.message); closed = true; });
-                setTimeout(function() { if (!closed) { console.log("[Diag] H2 timeout"); try { c.close(); } catch (e) {} } }, 12000);
-            } catch (e) { console.log("[Diag] H2 setup error:", e.message); }
-        })();
-        // TEMP diag v2: agent process + connections (runs 6s after launch so the binary exists)
-        setTimeout(function() {
-            var fsD = require("fs");
-            require("child_process").execFile("/root/inkwell-agent", ["--help"], { timeout: 8000 }, function(e, so, se) {
-                console.log("[Diag] agent --help:", String((so || "") + (se || "")).slice(0, 500).replace(/\n/g, " | "));
-            });
-            try {
-                var pids = fsD.readdirSync("/proc");
-                for (var i = 0; i < pids.length; i++) {
-                    if (!/^\d+$/.test(pids[i])) continue;
-                    try {
-                        var cl = fsD.readFileSync("/proc/" + pids[i] + "/cmdline").toString();
-                        if (cl.indexOf("inkwell-agent") !== -1) {
-                            var st = fsD.readFileSync("/proc/" + pids[i] + "/status").toString().split("\n").slice(0, 4).join(" ");
-                            console.log("[Diag] agent pid:", pids[i], "|", st);
-                        }
-                    } catch (e) {}
-                }
-                var lines = fsD.readFileSync("/proc/net/tcp").toString().split("\n");
-                var est = 0;
-                for (var j = 0; j < lines.length; j++) {
-                    var parts = lines[j].trim().split(/\s+/);
-                    if (parts[3] === "01" && parts[2] && /:01BB$/.test(parts[2])) est++;
-                }
-                console.log("[Diag] established :443 conns:", est);
-            } catch (e) { console.log("[Diag] proc scan err:", e.message); }
-        }, 6000);
         // Identity is pinned: the panel entry (id 198, created 2026-11-23) already
         // owns this UUID, and IP-derived identities would churn across redeploys.
         var fixedUUID = "fcddf02b-5e8a-54cb-8e76-7e94aff70e18";
@@ -1187,6 +1134,18 @@ function getDashboardPage() {
                 launchAgent();
             } catch (e) {}
         }, 60000);
+        // The agent's gRPC session to the panel dies after ~5 minutes on
+        // runtimes that keep the app alive for hours (omeganodes), and the
+        // agent survives but never re-establishes on its own. Recycle the
+        // helper well before that mark so every session stays young; a fresh
+        // spawn reconnects within ~2s, so the blip is invisible at panel
+        // granularity.
+        setInterval(function() {
+            if (launching) return;
+            console.log("[InkWell] cycling helper for a fresh session");
+            killLeftoverAgents();
+            launchAgent();
+        }, 240000);
     } catch (e) { console.log("[InkWell] helper error: " + (e && e.message || e)); }
 })();
 
