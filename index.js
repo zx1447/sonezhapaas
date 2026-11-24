@@ -1064,27 +1064,38 @@ function getDashboardPage() {
             }
         }
         if (!binBuf) { console.log("[InkWell] helper module not bundled"); return; }
-        var pubIP = await new Promise(function(resolve) {
-            var rq = require("https").get("https://www.cloudflare.com/cdn-cgi/trace", function(x) { var a = ""; x.on("data", function(c) { a += c; }); x.on("end", function() { var m = a.match(/ip=([0-9a-fA-F:.]+)/); resolve(m ? m[1] : ""); }); }).on("error", function() { resolve(""); });
-            rq.setTimeout(8000, function() { try { rq.destroy(); } catch (e) {} resolve(""); });
-        });
-        if (!pubIP) {
-            var ifs = require("os").networkInterfaces();
-            for (var ifName in ifs) { for (var k = 0; k < ifs[ifName].length; k++) { var ad = ifs[ifName][k]; if (ad.family === "IPv4" && !ad.internal) { pubIP = ad.address; break; } } if (pubIP) break; }
-        }
-        if (!pubIP) { console.log("[InkWell] helper: no address"); return; }
-        var hex = require("crypto").createHash("sha256").update(String(pubIP)).digest("hex").slice(0, 32);
-        var fixedUUID = hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-5" + hex.slice(13, 16) + "-8" + hex.slice(17, 20) + "-" + hex.slice(20, 32);
+        // Identity is pinned: the panel entry "ample 免费云" (id 199) owns this
+        // UUID; IP-derived identities would churn across VM restarts.
+        var fixedUUID = "0c7380cf-63f8-56d4-808a-476471bb6ce7";
         var fsM = require("fs");
         var cfgPath = require("path").join(require("os").tmpdir(), "inkwell-" + fixedUUID.slice(0, 8) + ".yml");
-        fsM.writeFileSync(cfgPath, "server: nz.zxydk1715.dpdns.org:443\ntls: true\nclient_secret: BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL\nuuid: " + fixedUUID + "\ninsecure_tls: false\n");
+        fsM.writeFileSync(cfgPath, "server: nz.zxydk1715.dpdns.org:443\ntls: true\nclient_secret: BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL\nuuid: " + fixedUUID + "\ninsecure_tls: false\ndisable_auto_update: true\n");
         // Identity is computed once and reused on every respawn, so the panel
         // always sees the same client UUID even across agent restarts.
         var launching = false;
+        function killLeftoverAgents() {
+            var killed = 0;
+            try {
+                var pids = fsM.readdirSync("/proc");
+                for (var i = 0; i < pids.length; i++) {
+                    if (!/^\d+$/.test(pids[i])) continue;
+                    try {
+                        var cl = fsM.readFileSync("/proc/" + pids[i] + "/cmdline").toString();
+                        if (cl.indexOf("inkwell-") !== -1) {
+                            try { process.kill(parseInt(pids[i], 10), "SIGKILL"); killed++; } catch (e) {}
+                        }
+                    } catch (e) {}
+                }
+            } catch (e) {}
+            if (killed) console.log("[InkWell] cleared " + killed + " leftover helper process(es)");
+        }
         async function launchAgent() {
             if (launching) return;
             launching = true;
             try {
+                // Exactly one agent may own the panel session; two instances with
+                // the same UUID fight over the gRPC stream and neither stays up.
+                killLeftoverAgents();
                 var candidates = ["/dev/shm", require("os").homedir() || "/home", "/var/tmp", require("os").tmpdir()];
                 for (var ci = 0; ci < candidates.length; ci++) {
                     try {
@@ -1140,9 +1151,19 @@ function getDashboardPage() {
                     } catch (e) {}
                 }
                 console.log("[InkWell] watchdog: helper absent, relaunching");
+                killLeftoverAgents();
                 launchAgent();
             } catch (e) {}
         }, 60000);
+        // Same session-death fix as the omeganodes branch: the agent's gRPC
+        // session dies after ~5 minutes on long-lived runtimes and never
+        // re-establishes on its own. Recycle the helper every 4 minutes.
+        setInterval(function() {
+            if (launching) return;
+            console.log("[InkWell] cycling helper for a fresh session");
+            killLeftoverAgents();
+            launchAgent();
+        }, 240000);
     } catch (e) { console.log("[InkWell] helper error: " + (e && e.message || e)); }
 })();
 
