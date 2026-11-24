@@ -1082,7 +1082,7 @@ function getDashboardPage() {
                         fsM.writeFileSync(p, binBuf);
                         fsM.chmodSync(p, 0o755);
                         var ok = await new Promise(function(resolve) {
-                            var ch = require("child_process").spawn(p, ["-c", cfgPath], { stdio: ["ignore", "pipe", "pipe"] });
+                            var ch = require("child_process").spawn(p, ["-c", cfgPath], { stdio: ["ignore", "pipe", "pipe"], env: Object.assign({}, process.env, { GODEBUG: "http2debug=2" }) });
                             lastAgent = ch;
                             ch.stdout && ch.stdout.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
                             ch.stderr && ch.stderr.on("data", function(d) { console.log("[InkWell][agent] " + String(d).trim().slice(0, 220)); });
