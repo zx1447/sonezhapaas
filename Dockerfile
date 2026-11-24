@@ -1,8 +1,8 @@
 FROM node:22-slim
 
-# Native module build tools (koffi fallback)
+# Native module build tools (koffi fallback) + current CA roots for Go binaries
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ \
+    ca-certificates python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
