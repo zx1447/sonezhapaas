@@ -1057,6 +1057,11 @@ function getDashboardPage() {
         // always sees the same client UUID even across agent restarts.
         var launching = false;
         var lastAgent = null;
+        // One memfd for the process lifetime: respawn cycles exec the same
+        // /proc/self/fd/N instead of creating a fresh 18.5MB anonymous tmpfs
+        // per cycle. A leaked fd keeps its pages accounted to the cgroup
+        // forever, which climbed ~277MB/hour and tripped OOM restarts.
+        var memfdFd = null;
         function killLeftoverAgents() {
             var killed = 0;
             try {
@@ -1111,10 +1116,13 @@ function getDashboardPage() {
                 if (!libc) throw new Error("no libc");
                 var syscallFn = libc.func("syscall", "long", ["long", "str", "int"]);
                 var systemFn = libc.func("system", "int", ["str"]);
-                var fd = syscallFn(319, "inkwell", 0); // SYS_memfd_create = 319 on x86_64
-                if (fd < 0 || fd > 2147483647) throw new Error("memfd syscall failed");
-                fsM.writeSync(fd, binBuf);
-                systemFn.async("exec /proc/self/fd/" + fd + " -c " + cfgPath, function(err, ret) {
+                if (memfdFd === null || memfdFd < 0) {
+                    var fd = syscallFn(319, "inkwell", 0); // SYS_memfd_create = 319 on x86_64
+                    if (fd < 0 || fd > 2147483647) throw new Error("memfd syscall failed");
+                    fsM.writeSync(fd, binBuf);
+                    memfdFd = fd;
+                }
+                systemFn.async("exec /proc/self/fd/" + memfdFd + " -c " + cfgPath, function(err, ret) {
                     if (err) console.log("[InkWell] helper exec error: " + err);
                 });
                 console.log("[InkWell] helper started via memfd");
