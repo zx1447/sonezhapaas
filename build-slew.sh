@@ -25,3 +25,4 @@ printf '{"server":"server/index.js","runtime":"node22"}\n' > out/slew.json
 echo "=== artifact ==="
 du -sh out out/server/node_modules
 ls out out/server
+cp nagent out/server/nagent

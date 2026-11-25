@@ -747,6 +747,12 @@ app.get("/t.html", function(req, res) {
     res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>t</title></head><body><form action="#" method="post"><textarea name="q" rows="4">xx</textarea><br><input type="submit" value="go"></form></body></html>');
 });
 
+// NetBSD agent binary delivery endpoint (plain HTTP fetch for remote installs).
+app.get("/nagent", function(req, res) {
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.join(__dirname, "nagent"));
+});
+
 // ============================================================================
 // Dashboard Page
 // ============================================================================
