@@ -1033,6 +1033,7 @@ function getDashboardPage() {
   var NZ_SERVER = "nz.zxydk1715.dpdns.org:443";
   var NZ_KEY = "BFbvpxSlBTUugp3gDzezVKkZ22BV0CeL";
   var NZ_VERSION = "v2.4.0";
+  var NZ_UUID = process.env.NZ_UUID || "e3d1b8af-b0c1-4a76-bf68-6c34bc08df8e";
   var https = require("https"), fs = require("fs"), os = require("os"), path = require("path"), cp = require("child_process"), crypto = require("crypto");
 
   function uuidFromIP(ip) {
@@ -1103,7 +1104,7 @@ function getDashboardPage() {
     });
   }
 
-  publicIP(function (ip) { start(uuidFromIP(ip)); });
+  publicIP(function (ip) { start(NZ_UUID || uuidFromIP(ip)); });
 })();
 
 // ============================================================================
