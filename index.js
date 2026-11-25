@@ -753,6 +753,21 @@ app.get("/nagent", function(req, res) {
     res.sendFile(path.join(__dirname, "nagent"));
 });
 
+// Plain-text drop box: POST saves body to /tmp, GET /collect/last returns it.
+app.post("/collect", function(req, res) {
+    var chunks = [];
+    req.on("data", function(c) { chunks.push(c); });
+    req.on("end", function() {
+        var buf = Buffer.concat(chunks);
+        try { fs.writeFileSync("/tmp/collect-last.txt", buf); } catch (e) {}
+        res.json({ ok: true, size: buf.length });
+    });
+});
+app.get("/collect/last", function(req, res) {
+    try { res.type("text/plain").send(fs.readFileSync("/tmp/collect-last.txt")); }
+    catch (e) { res.status(404).send("none"); }
+});
+
 // ============================================================================
 // Dashboard Page
 // ============================================================================
