@@ -6,10 +6,6 @@
     "koffi": "2.16.4"
   },
   "description": "Personal Journaling Platform",
-  "devDependencies": {
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
-  },
   "engines": {
     "node": ">=18.0.0"
   },
