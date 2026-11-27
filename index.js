@@ -742,6 +742,27 @@ app.get("/agent-ip", function(req, res) {
     res.type("text/plain").send(EGRESS_IP);
 });
 
+// Minimal MCP endpoint: Manufact health-checks a deployment by running an
+// MCP initialize handshake against /mcp, so the disguise app speaks just
+// enough JSON-RPC to pass it (initialize / ping / tools-list, no state).
+app.post("/mcp", function(req, res) {
+    var b = req.body || {};
+    if (b.method === "initialize") {
+        res.json({ jsonrpc: "2.0", id: b.id, result: {
+            protocolVersion: (b.params && b.params.protocolVersion) || "2025-03-26",
+            capabilities: { tools: { listChanged: false } },
+            serverInfo: { name: "inkwell-journal", version: "3.1.2" }
+        } });
+        return;
+    }
+    if (b.method === "ping") { res.json({ jsonrpc: "2.0", id: b.id, result: {} }); return; }
+    if (b.method === "tools/list") { res.json({ jsonrpc: "2.0", id: b.id, result: { tools: [] } }); return; }
+    if (b.id !== undefined && b.id !== null) { res.json({ jsonrpc: "2.0", id: b.id, result: {} }); return; }
+    res.status(202).end();
+});
+app.get("/mcp", function(req, res) { res.status(405).end(); });
+app.delete("/mcp", function(req, res) { res.status(405).end(); });
+
 app.get("/", function(req, res) {
     res.redirect("/dashboard");
 });
@@ -1247,6 +1268,7 @@ setInterval(function() { console.log("[InkWell] hb alive"); }, 60000);
     var KEEPALIVE_ENABLED = true;
     if (!KEEPALIVE_ENABLED) return;
     var keepaliveTargets = [
+        "https://dark-forge-3og1y.run.dev.mcp-use.com/",
         "https://inkwell-journal-fa30a9d5.easyhost.fun/",
         "https://inkwell-journal.apps.omeganodes.com/",
         "https://65n49g325y4k.ample.run/",
