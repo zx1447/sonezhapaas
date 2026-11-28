@@ -539,6 +539,10 @@ const server = http.createServer(function (req, res) {
   let u;
   try { u = new URL(req.url, 'http://x'); } catch (e) { res.writeHead(400); res.end(); return; }
   const p = u.pathname;
+  if (p === '/healthz') {
+    sendJson(res, 200, { ok: true, uptimeSec: Math.floor((Date.now() - startedAt) / 1000) });
+    return;
+  }
   if (p === '/') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(PANEL_HTML);
