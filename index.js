@@ -35,10 +35,10 @@ const PORT = parseInt(process.env.PORT || '20041', 10) || 20041;
 const NODE_NAME = 'Hostrix-Argo';
 
 /* ---- 组件路径与端口 ---- */
-const XRAY_BIN = path.join(__dirname, 'xray');
-const XRAY_CFG = path.join(__dirname, 'xray-config.json');
-const ARGO_BIN = process.env.ARGO_BIN || path.join(__dirname, 'cloudflared');
-const BOOT_LOG = path.join(__dirname, 'argo-boot.log');
+const XRAY_BIN = process.env.XRAY_BIN || path.join(__dirname, 'xray');
+const XRAY_CFG = process.env.XRAY_CFG || '/tmp/xray-config.json';
+const ARGO_BIN = process.env.ARGO_BIN || '/tmp/cloudflared';
+const BOOT_LOG = process.env.BOOT_LOG || '/tmp/argo-boot.log';
 const ARGO_PORT = 8001;
 const PATH_VLESS = '/vless-argo';
 const PATH_VMESS = '/vmess-argo';
