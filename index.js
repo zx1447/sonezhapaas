@@ -565,6 +565,10 @@ const server = http.createServer(function (req, res) {
     checkOutbound(function (ok, msg) { sendJson(res, 200, { ok: ok, msg: msg }); });
     return;
   }
+  if (p === '/api/boot') {
+    sendJson(res, 200, { ok: true, tail: tailLog(3000) });
+    return;
+  }
   if (p === '/api/reset') {
     if (req.method !== 'POST') { sendJson(res, 405, { ok: false, msg: 'method not allowed' }); return; }
     if (req.headers.origin) {
