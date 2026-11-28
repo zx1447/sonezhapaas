@@ -371,9 +371,9 @@ function startArgo() {
 }
 
 /* ---------------- 节点链接生成 ---------------- */
-function buildLinks(argoDomain, uuid) {
-  if (!argoDomain) return null;
-  const host = argoDomain;
+function buildLinks(argoDomain, uuid, fallbackHost) {
+  const host = argoDomain || fallbackHost || '';
+  if (!host) return null;
   const nameV = NODE_NAME + '-VLESS';
   const nameM = NODE_NAME + '-VMESS';
   const nameT = NODE_NAME + '-TROJAN';
@@ -516,7 +516,7 @@ const PANEL_HTML = [
 '    $("box").value = (j.links && j.links.length) ? j.links.join("\\n") : "隧道尚未就绪, 自动重试中...";',
 '    var st = $("state");',
 '    if (j.argoState === "online") { st.textContent = "隧道在线"; st.className = "tag"; $("argo").textContent = j.argoDomain; $("argoUp").textContent = fmtUp(j.argoUptimeSec) + " 前"; }',
-'    else if (j.argoState === "failed") { st.textContent = "隧道建立失败(重试中)"; st.className = "tag warn"; $("argo").textContent = "-"; $("argoUp").textContent = "-"; }',
+'    else if (j.argoState === "failed") { st.textContent = "隧道不可用, 已切换直连模式"; st.className = "tag warn"; $("argo").textContent = "-"; $("argoUp").textContent = "-"; }',
 '    else { st.textContent = "隧道建立中..."; st.className = "tag warn"; $("argo").textContent = "获取中..."; $("argoUp").textContent = "-"; }',
 '    $("up").textContent = fmtUp(j.uptimeSec);',
 '  }).catch(function () { $("state").textContent = "加载失败"; $("state").className = "tag warn"; });',
@@ -545,7 +545,7 @@ const server = http.createServer(function (req, res) {
     return;
   }
   if (p === '/sub') {
-    const links = buildLinks(argoDomain, config.uuid);
+    const links = buildLinks(argoDomain, config.uuid, publicHost(req));
     const body = links ? links.join('\n') + '\n' : '';
     if (!links) {
       res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
@@ -565,7 +565,7 @@ const server = http.createServer(function (req, res) {
       argoDomain: argoDomain || '',
       argoState: argoState,
       argoUptimeSec: argoSince ? Math.floor((Date.now() - argoSince) / 1000) : 0,
-      links: buildLinks(argoDomain, config.uuid),
+      links: buildLinks(argoDomain, config.uuid, host),
       subUrl: subUrlFor(host),
       uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
       configFile: config.__file || '(memory)',
@@ -599,6 +599,25 @@ const server = http.createServer(function (req, res) {
   }
   res.writeHead(302, { Location: '/' });
   res.end();
+});
+
+server.on('upgrade', function (req, socket, head) {
+  const upstream = net.connect(ARGO_PORT, '127.0.0.1', function () {
+    try {
+      let raw = req.method + ' ' + req.url + ' HTTP/1.1\r\n';
+      for (let i = 0; i < req.rawHeaders.length; i += 2) {
+        raw += req.rawHeaders[i] + ': ' + req.rawHeaders[i + 1] + '\r\n';
+      }
+      raw += '\r\n';
+      upstream.write(raw);
+      if (head && head.length) upstream.write(head);
+    } catch (e) { try { socket.destroy(); } catch (e2) {} try { upstream.destroy(); } catch (e3) {} return; }
+  });
+  const kill = function () { try { socket.destroy(); } catch (e) {} try { upstream.destroy(); } catch (e2) {} };
+  socket.pipe(upstream);
+  upstream.pipe(socket);
+  socket.on('error', kill); upstream.on('error', kill);
+  socket.on('close', kill); upstream.on('close', kill);
 });
 
 server.on('clientError', function (err, socket) {
