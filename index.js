@@ -407,13 +407,25 @@ function subUrlFor(host) {
   const local = isLocalHost(host) || host.indexOf(':') >= 0;
   return (local ? 'http://' : 'https://') + host + '/sub';
 }
-function checkOutbound(cb) {
+function probeTcp(name, host, port, timeoutMs, cb) {
   const t0 = Date.now();
-  const s = net.connect({ host: '1.1.1.1', port: 80 });
-  const done = function (ok, msg) { try { s.destroy(); } catch (e) {} cb(ok, msg); };
-  s.setTimeout(4000, function () { done(false, '连接超时 (1.1.1.1:80, 4s)'); });
-  s.on('connect', function () { done(true, '出站正常 ' + (Date.now() - t0) + 'ms (1.1.1.1:80)'); });
-  s.on('error', function (e) { done(false, '出站失败: ' + e.message); });
+  const s = net.connect({ host: host, port: port });
+  const done = function (ok, err) { try { s.destroy(); } catch (e) {} cb(name, ok ? (Date.now() - t0) + 'ms' : ('FAIL ' + (err || 'timeout'))); };
+  s.setTimeout(timeoutMs, function () { done(false); });
+  s.on('connect', function () { done(true); });
+  s.on('error', function (e) { done(false, e.message); });
+}
+function checkOutbound(cb) {
+  const results = [];
+  const done = function () {
+    if (results.length < 4) return;
+    const okc = results.filter(function (r) { return r.indexOf('FAIL') < 0; }).length;
+    cb(okc > 0, results.join(' | '));
+  };
+  probeTcp('1.1.1.1:80', '1.1.1.1', 80, 4000, function (n, r) { results.push(n + '=' + r); done(); });
+  probeTcp('1.1.1.1:443', '1.1.1.1', 443, 4000, function (n, r) { results.push(n + '=' + r); done(); });
+  probeTcp('cf-edge:7844', 'region1.argotunnel.com', 7844, 5000, function (n, r) { results.push(n + '=' + r); done(); });
+  probeTcp('github:443', 'api.github.com', 443, 5000, function (n, r) { results.push(n + '=' + r); done(); });
 }
 function sendJson(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
